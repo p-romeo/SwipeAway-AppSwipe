@@ -41,6 +41,36 @@ class SwipeViewModel(
         }
     }
 
+    val hapticFeedback: StateFlow<Boolean> = settingsManager.hapticFeedbackFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    fun setHapticFeedback(enabled: Boolean) = viewModelScope.launch { settingsManager.setHapticFeedback(enabled) }
+
+    val sortOrder: StateFlow<String> = settingsManager.sortOrderFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Size")
+
+    fun setSortOrder(order: String) = viewModelScope.launch { settingsManager.setSortOrder(order) }
+
+    val themePreference: StateFlow<String> = settingsManager.themePreferenceFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "System")
+
+    fun setThemePreference(theme: String) = viewModelScope.launch { settingsManager.setThemePreference(theme) }
+
+    val showStorageSize: StateFlow<Boolean> = settingsManager.showStorageSizeFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    fun setShowStorageSize(show: Boolean) = viewModelScope.launch { settingsManager.setShowStorageSize(show) }
+
+    val showLastTimeUsed: StateFlow<Boolean> = settingsManager.showLastTimeUsedFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    fun setShowLastTimeUsed(show: Boolean) = viewModelScope.launch { settingsManager.setShowLastTimeUsed(show) }
+
+    val animationSpeed: StateFlow<String> = settingsManager.animationSpeedFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Default")
+
+    fun setAnimationSpeed(speed: String) = viewModelScope.launch { settingsManager.setAnimationSpeed(speed) }
+
     // UI States
     val allRecords: StateFlow<List<SwipeRecord>> = repository.allRecordsFlow
         .combine(isIgnoreSystemApps) { list, ignore ->
@@ -51,6 +81,14 @@ class SwipeViewModel(
     val pendingApps: StateFlow<List<SwipeRecord>> = repository.pendingRecordsFlow
         .combine(isIgnoreSystemApps) { list, ignore ->
             if (ignore) list.filter { !it.isSystemApp } else list
+        }
+        .combine(settingsManager.sortOrderFlow) { list, order ->
+            when (order) {
+                "Size" -> list.sortedBy { it.storageSizeMb }
+                "Date Last Used" -> list.sortedByDescending { it.lastUsedDaysAgo }
+                "Alphabetical" -> list.sortedByDescending { it.appName.lowercase() }
+                else -> list.sortedBy { it.storageSizeMb }
+            }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 

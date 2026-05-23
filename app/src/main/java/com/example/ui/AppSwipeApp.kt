@@ -258,6 +258,12 @@ fun SwipeScreen(viewModel: SwipeViewModel) {
     val pendingList by viewModel.pendingApps.collectAsStateWithLifecycle()
     val stats by viewModel.storageStatistics.collectAsStateWithLifecycle()
     val isRightSwipeUninstall by viewModel.isRightSwipeUninstall.collectAsStateWithLifecycle()
+    
+    val hapticFeedback by viewModel.hapticFeedback.collectAsStateWithLifecycle()
+    val showStorageSize by viewModel.showStorageSize.collectAsStateWithLifecycle()
+    val showLastTimeUsed by viewModel.showLastTimeUsed.collectAsStateWithLifecycle()
+    val animationSpeed by viewModel.animationSpeed.collectAsStateWithLifecycle()
+
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     
@@ -440,7 +446,11 @@ fun SwipeScreen(viewModel: SwipeViewModel) {
                             onCategoryChanged = { newCat ->
                                 viewModel.updateCategory(app.packageName, newCat)
                             },
-                            isRightSwipeUninstall = isRightSwipeUninstall
+                            isRightSwipeUninstall = isRightSwipeUninstall,
+                            hapticFeedback = hapticFeedback,
+                            showStorageSize = showStorageSize,
+                            showLastTimeUsed = showLastTimeUsed,
+                            animationSpeed = animationSpeed
                         )
                     }
                 }
@@ -622,21 +632,31 @@ fun SwipeCard(
     onSwipeLeft: () -> Unit,
     onSwipeRight: () -> Unit,
     onCategoryChanged: (String) -> Unit,
-    isRightSwipeUninstall: Boolean
+    isRightSwipeUninstall: Boolean,
+    hapticFeedback: Boolean = true,
+    showStorageSize: Boolean = true,
+    showLastTimeUsed: Boolean = true,
+    animationSpeed: String = "Default"
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     
     var dragX by remember(app.packageName) { mutableStateOf(0f) }
     var dragY by remember(app.packageName) { mutableStateOf(0f) }
-      val smoothSpring = spring<Float>(
-        dampingRatio = Spring.DampingRatioMediumBouncy,
-        stiffness = Spring.StiffnessMediumLow
-    )
-    val flyoutSpec = androidx.compose.animation.core.tween<Float>(
-        durationMillis = 250,
-        easing = androidx.compose.animation.core.FastOutLinearInEasing
-    )
+    
+    val smoothSpring = when (animationSpeed) {
+        "Relaxed" -> spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)
+        "Snappy" -> spring<Float>(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMedium)
+        "Silly" -> spring<Float>(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessVeryLow)
+        else -> spring<Float>(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)
+    }
+    
+    val flyoutSpec = when (animationSpeed) {
+        "Relaxed" -> androidx.compose.animation.core.tween<Float>(durationMillis = 400, easing = androidx.compose.animation.core.FastOutLinearInEasing)
+        "Snappy" -> androidx.compose.animation.core.tween<Float>(durationMillis = 150, easing = androidx.compose.animation.core.FastOutLinearInEasing)
+        "Silly" -> androidx.compose.animation.core.tween<Float>(durationMillis = 600, easing = androidx.compose.animation.core.LinearOutSlowInEasing)
+        else -> androidx.compose.animation.core.tween<Float>(durationMillis = 250, easing = androidx.compose.animation.core.FastOutLinearInEasing)
+    }
     
     // Swipe thresholds
     val swipeThreshold = with(density) { 140.dp.toPx() }
@@ -774,7 +794,9 @@ fun SwipeCard(
                         velocityTracker.addPosition(change.uptimeMillis, change.position)
                         
                         if (abs(dragX) > swipeThreshold && !hasHapticFired) {
-                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            if (hapticFeedback) {
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            }
                             hasHapticFired = true
                         } else if (abs(dragX) < swipeThreshold && hasHapticFired) {
                             hasHapticFired = false
@@ -886,71 +908,77 @@ fun SwipeCard(
 
             // Central stats section
             Column {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    // Storage Stat Block
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            "STORAGE",
-                            style = MaterialTheme.typography.labelSmall,
-                            letterSpacing = 1.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                        )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.Star,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = formatSize(app.storageSizeMb),
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+                if (showStorageSize || showLastTimeUsed) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Spacer(modifier = Modifier.height(12.dp))
                     
-                    // Usage Stat Block
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            "LAST TIME USED",
-                            style = MaterialTheme.typography.labelSmall,
-                            letterSpacing = 1.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                        )
-                        val badgeColor = if (app.lastUsedDaysAgo >= 90) MaterialTheme.colorScheme.error else if (app.lastUsedDaysAgo >= 30) MaterialTheme.colorScheme.primary else Color(0xFF4CAF50)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        // Storage Stat Block
+                        if (showStorageSize) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "STORAGE",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    letterSpacing = 1.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.Star,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = formatSize(app.storageSizeMb),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
                         
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .background(badgeColor, CircleShape)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = when (app.lastUsedDaysAgo) {
-                                    0 -> "Today"
-                                    1 -> "Yesterday"
-                                    else -> "${app.lastUsedDaysAgo} days ago"
-                                },
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = if (app.lastUsedDaysAgo >= 90) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
-                            )
+                        // Usage Stat Block
+                        if (showLastTimeUsed) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "LAST TIME USED",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    letterSpacing = 1.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                                val badgeColor = if (app.lastUsedDaysAgo >= 90) MaterialTheme.colorScheme.error else if (app.lastUsedDaysAgo >= 30) MaterialTheme.colorScheme.primary else Color(0xFF4CAF50)
+                                
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .background(badgeColor, CircleShape)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = when (app.lastUsedDaysAgo) {
+                                            0 -> "Today"
+                                            1 -> "Yesterday"
+                                            else -> "${app.lastUsedDaysAgo} days ago"
+                                        },
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (app.lastUsedDaysAgo >= 90) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
                         }
                     }
+    
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
 
                 // Custom category modifier inside Swipe view to re-categorize!
                 var expandedCat by remember { mutableStateOf(false) }
@@ -1572,6 +1600,13 @@ fun InsightsScreen(viewModel: SwipeViewModel) {
 fun SettingsScreen(viewModel: SwipeViewModel) {
     val isIgnoreSystem by viewModel.isIgnoreSystemApps.collectAsStateWithLifecycle()
     val isRightSwipeUninstall by viewModel.isRightSwipeUninstall.collectAsStateWithLifecycle()
+    
+    val hapticFeedback by viewModel.hapticFeedback.collectAsStateWithLifecycle()
+    val sortOrder by viewModel.sortOrder.collectAsStateWithLifecycle()
+    val themePreference by viewModel.themePreference.collectAsStateWithLifecycle()
+    val showStorageSize by viewModel.showStorageSize.collectAsStateWithLifecycle()
+    val showLastTimeUsed by viewModel.showLastTimeUsed.collectAsStateWithLifecycle()
+    val animationSpeed by viewModel.animationSpeed.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -1586,6 +1621,38 @@ fun SettingsScreen(viewModel: SwipeViewModel) {
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(bottom = 24.dp)
         )
+        
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "VISUALS",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    letterSpacing = 1.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                Text(
+                    text = "Theme Preference",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                SegmentedControl(
+                    options = listOf("System", "Light", "Dark"),
+                    selectedOption = themePreference,
+                    onOptionSelected = { viewModel.setThemePreference(it) }
+                )
+            }
+        }
 
         Card(
             modifier = Modifier
@@ -1597,7 +1664,7 @@ fun SettingsScreen(viewModel: SwipeViewModel) {
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "SWIPE PREFERENCES",
+                    text = "BEHAVIORS",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     letterSpacing = 1.sp,
@@ -1617,7 +1684,7 @@ fun SettingsScreen(viewModel: SwipeViewModel) {
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "When active, swiping right queues apps for uninstall. When inactive, swiping left queues them.",
+                            text = "When active, swiping right queues apps for uninstall.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1627,6 +1694,45 @@ fun SettingsScreen(viewModel: SwipeViewModel) {
                         onCheckedChange = { viewModel.toggleRightSwipeUninstall() }
                     )
                 }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                        Text(
+                            text = "Haptic Feedback",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Vibrate when drag threshold is reached.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = hapticFeedback,
+                        onCheckedChange = { viewModel.setHapticFeedback(it) }
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "Animation Speed",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                SegmentedControl(
+                    options = listOf("Relaxed", "Default", "Snappy", "Silly"),
+                    selectedOption = animationSpeed,
+                    onOptionSelected = { viewModel.setAnimationSpeed(it) }
+                )
             }
         }
 
@@ -1640,7 +1746,7 @@ fun SettingsScreen(viewModel: SwipeViewModel) {
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "FILTERS",
+                    text = "CARD DISPLAY & SORTING",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     letterSpacing = 1.sp,
@@ -1648,6 +1754,61 @@ fun SettingsScreen(viewModel: SwipeViewModel) {
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 
+                Text(
+                    text = "Sort Order",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                SegmentedControl(
+                    options = listOf("Size", "Date Last Used", "Alphabetical"),
+                    selectedOption = sortOrder,
+                    onOptionSelected = { viewModel.setSortOrder(it) },
+                    labelString = { if (it == "Date Last Used") "Date" else it }
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                        Text(
+                            text = "Show Storage Size",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Switch(
+                        checked = showStorageSize,
+                        onCheckedChange = { viewModel.setShowStorageSize(it) }
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                        Text(
+                            text = "Show Last Time Used",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Switch(
+                        checked = showLastTimeUsed,
+                        onCheckedChange = { viewModel.setShowLastTimeUsed(it) }
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1658,11 +1819,6 @@ fun SettingsScreen(viewModel: SwipeViewModel) {
                             text = "Ignore System Apps",
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Hide OS components, pre-installed dialers, and core system utilities from swipe & queue lists.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     Switch(
@@ -1725,5 +1881,49 @@ fun getCategoryTheme(category: String): CategoryTheme {
         "Entertainment" -> CategoryTheme(Color(0xFF2196F3), Icons.Default.PlayArrow) // Blue
         "Utilities" -> CategoryTheme(Color(0xFFFF9800), Icons.Default.Settings) // Orange
         else -> CategoryTheme(Color(0xFF607D8B), Icons.Default.Info) // Grey
+    }
+}
+
+@Composable
+fun <T> SegmentedControl(
+    options: List<T>,
+    selectedOption: T,
+    onOptionSelected: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    labelString: (T) -> String = { it.toString() }
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(40.dp)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(50))
+            .clip(RoundedCornerShape(50))
+    ) {
+        options.forEachIndexed { index, option ->
+            val isSelected = option == selectedOption
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
+                    .clickable { onOptionSelected(option) },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = labelString(option),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (index < options.size - 1) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(1.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant)
+                )
+            }
+        }
     }
 }

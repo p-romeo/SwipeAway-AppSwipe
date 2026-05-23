@@ -5,6 +5,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.getValue
 import com.example.data.AppSwipeDatabase
 import com.example.data.SwipeRepository
 import com.example.ui.AppSwipeApp
@@ -26,7 +28,14 @@ class MainActivity : ComponentActivity() {
     )[SwipeViewModel::class.java]
     
     setContent {
-      MyApplicationTheme {
+      val themePref by viewModel.themePreference.collectAsStateWithLifecycle()
+      val darkTheme = when (themePref) {
+          "Light" -> false
+          "Dark" -> true
+          else -> androidx.compose.foundation.isSystemInDarkTheme()
+      }
+
+      MyApplicationTheme(darkTheme = darkTheme, dynamicColor = false) {
         AppSwipeApp(viewModel)
       }
     }
