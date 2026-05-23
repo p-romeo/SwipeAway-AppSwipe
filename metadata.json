@@ -1,0 +1,6 @@
+{
+  "name": "SwipeAway",
+  "description": "A fast, visual, swipe-based app cleanup tool that helps you declutter your phone. Swipe right to queue for uninstall, or left to keep.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
