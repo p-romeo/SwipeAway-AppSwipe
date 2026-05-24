@@ -71,6 +71,11 @@ class SwipeViewModel(
 
     fun setAnimationSpeed(speed: String) = viewModelScope.launch { settingsManager.setAnimationSpeed(speed) }
 
+    val isOnboardingCompleted: StateFlow<Boolean> = settingsManager.isOnboardingCompletedFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun setOnboardingCompleted(completed: Boolean) = viewModelScope.launch { settingsManager.setOnboardingCompleted(completed) }
+
     // UI States
     val allRecords: StateFlow<List<SwipeRecord>> = repository.allRecordsFlow
         .combine(isIgnoreSystemApps) { list, ignore ->

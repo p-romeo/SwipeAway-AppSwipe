@@ -177,6 +177,8 @@ fun AppSwipeApp(viewModel: SwipeViewModel) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
+
+    val isOnboardingCompleted by viewModel.isOnboardingCompleted.collectAsStateWithLifecycle()
     
     var currentTab by remember { mutableStateOf(AppTab.SWIPE) }
     
@@ -205,48 +207,63 @@ fun AppSwipeApp(viewModel: SwipeViewModel) {
         }
     }
 
-    Scaffold(
-        bottomBar = {
-            NavigationBar(
-                modifier = Modifier
-                    .windowInsetsPadding(WindowInsets.navigationBars)
-                    .testTag("app_navigation_bar"),
-                tonalElevation = 8.dp
-            ) {
-                AppTab.values().forEach { tab ->
-                    NavigationBarItem(
-                        selected = currentTab == tab,
-                        onClick = { currentTab = tab },
-                        icon = { Icon(tab.icon, contentDescription = tab.title) },
-                        label = { Text(tab.title, fontWeight = FontWeight.SemiBold) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            selectedTextColor = MaterialTheme.colorScheme.primary,
-                            indicatorColor = MaterialTheme.colorScheme.primaryContainer
-                        ),
-                        modifier = Modifier.testTag("nav_tab_${tab.name.lowercase()}")
-                    )
+    Crossfade(
+        targetState = isOnboardingCompleted,
+        animationSpec = tween(durationMillis = 500),
+        label = "onboarding_crossfade"
+    ) { completed ->
+        if (!completed) {
+            OnboardingScreen(
+                viewModel = viewModel,
+                onFinish = {
+                    viewModel.setOnboardingCompleted(true)
                 }
-            }
-        },
-        contentWindowInsets = WindowInsets.safeDrawing
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .background(MaterialTheme.colorScheme.background)
-        ) {
-            Crossfade(
-                targetState = currentTab,
-                animationSpec = tween(durationMillis = 300),
-                label = "tab_crossfade"
-            ) { tab ->
-                when (tab) {
-                    AppTab.SWIPE -> SwipeScreen(viewModel)
-                    AppTab.QUEUE -> QueueScreen(viewModel)
-                    AppTab.INSIGHTS -> InsightsScreen(viewModel)
-                    AppTab.SETTINGS -> SettingsScreen(viewModel)
+            )
+        } else {
+            Scaffold(
+                bottomBar = {
+                    NavigationBar(
+                        modifier = Modifier
+                            .windowInsetsPadding(WindowInsets.navigationBars)
+                            .testTag("app_navigation_bar"),
+                        tonalElevation = 8.dp
+                    ) {
+                        AppTab.values().forEach { tab ->
+                            NavigationBarItem(
+                                selected = currentTab == tab,
+                                onClick = { currentTab = tab },
+                                icon = { Icon(tab.icon, contentDescription = tab.title) },
+                                label = { Text(tab.title, fontWeight = FontWeight.SemiBold) },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                    indicatorColor = MaterialTheme.colorScheme.primaryContainer
+                                ),
+                                modifier = Modifier.testTag("nav_tab_${tab.name.lowercase()}")
+                            )
+                        }
+                    }
+                },
+                contentWindowInsets = WindowInsets.safeDrawing
+            ) { paddingValues ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                        .background(MaterialTheme.colorScheme.background)
+                ) {
+                    Crossfade(
+                        targetState = currentTab,
+                        animationSpec = tween(durationMillis = 300),
+                        label = "tab_crossfade"
+                    ) { tab ->
+                        when (tab) {
+                            AppTab.SWIPE -> SwipeScreen(viewModel)
+                            AppTab.QUEUE -> QueueScreen(viewModel)
+                            AppTab.INSIGHTS -> InsightsScreen(viewModel)
+                            AppTab.SETTINGS -> SettingsScreen(viewModel)
+                        }
+                    }
                 }
             }
         }

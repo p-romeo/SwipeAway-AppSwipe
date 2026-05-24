@@ -22,7 +22,11 @@ class SettingsManager(private val context: Context) {
         val SHOW_STORAGE_SIZE = booleanPreferencesKey("show_storage_size")
         val SHOW_LAST_TIME_USED = booleanPreferencesKey("show_last_time_used")
         val ANIMATION_SPEED = stringPreferencesKey("animation_speed")
+        val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
     }
+
+    val isOnboardingCompletedFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences -> preferences[ONBOARDING_COMPLETED] ?: false }
 
     val isRightSwipeUninstallFlow: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
@@ -75,5 +79,9 @@ class SettingsManager(private val context: Context) {
 
     suspend fun setAnimationSpeed(speed: String) {
         context.dataStore.edit { it[ANIMATION_SPEED] = speed }
+    }
+
+    suspend fun setOnboardingCompleted(completed: Boolean) {
+        context.dataStore.edit { it[ONBOARDING_COMPLETED] = completed }
     }
 }
