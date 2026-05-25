@@ -30,8 +30,8 @@ import kotlinx.coroutines.delay
 
 enum class OnboardingStep {
     WELCOME,
-    PERMISSIONS,
-    READY
+    HOW_IT_WORKS,
+    PERMISSIONS
 }
 
 @Composable
@@ -54,15 +54,18 @@ fun OnboardingScreen(
         }, label = "onboarding_transition"
     ) { step ->
         when (step) {
-            OnboardingStep.WELCOME -> WelcomeStep(onNext = { currentStep = OnboardingStep.PERMISSIONS })
-            OnboardingStep.PERMISSIONS -> PermissionsStep(
-                onNext = { currentStep = OnboardingStep.READY },
+            OnboardingStep.WELCOME -> WelcomeStep(onNext = { currentStep = OnboardingStep.HOW_IT_WORKS })
+            OnboardingStep.HOW_IT_WORKS -> HowItWorksStep(
+                onNext = { currentStep = OnboardingStep.PERMISSIONS },
                 onBack = { currentStep = OnboardingStep.WELCOME }
             )
-            OnboardingStep.READY -> ReadyStep(onFinish = {
-                viewModel.setOnboardingCompleted(true)
-                onFinish()
-            })
+            OnboardingStep.PERMISSIONS -> PermissionsStep(
+                onFinish = {
+                    viewModel.setOnboardingCompleted(true)
+                    onFinish()
+                },
+                onBack = { currentStep = OnboardingStep.HOW_IT_WORKS }
+            )
         }
     }
 }
@@ -168,7 +171,7 @@ fun WelcomeStep(onNext: () -> Unit) {
         Spacer(modifier = Modifier.height(48.dp))
 
         Text(
-            text = "Reclaim Your Storage",
+            text = "Welcome to SwipeAway",
             style = MaterialTheme.typography.displaySmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
@@ -178,7 +181,7 @@ fun WelcomeStep(onNext: () -> Unit) {
         Spacer(modifier = Modifier.height(16.dp))
         
         Text(
-            text = "SwipeAway makes cleaning up your phone as easy as a swipe. Sort apps, delete junk, and get your space back in seconds.",
+            text = "Reclaim your storage with a single swipe. We make cleaning up your phone fun, fast, and incredibly easy.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -193,8 +196,8 @@ fun WelcomeStep(onNext: () -> Unit) {
                 .fillMaxWidth()
                 .height(64.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.tertiary,
-                contentColor = MaterialTheme.colorScheme.onTertiary
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
             ),
             shape = CircleShape
         ) {
@@ -203,7 +206,7 @@ fun WelcomeStep(onNext: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Get Started",
+                    "Continue",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -215,7 +218,7 @@ fun WelcomeStep(onNext: () -> Unit) {
 }
 
 @Composable
-fun PermissionsStep(onNext: () -> Unit, onBack: () -> Unit) {
+fun PermissionsStep(onFinish: () -> Unit, onBack: () -> Unit) {
     val context = LocalContext.current
     var isGranted by remember { mutableStateOf(PermissionUtils.isUsageAccessGranted(context)) }
 
@@ -266,14 +269,14 @@ fun PermissionsStep(onNext: () -> Unit, onBack: () -> Unit) {
                     modifier = Modifier
                         .size(96.dp)
                         .shadow(8.dp, CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
+                        .background(if (isGranted) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
                         .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        Icons.Default.Lock, // Equivalent to security
+                        if (isGranted) Icons.Default.Check else Icons.Default.Lock, // Equivalent to security
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = if (isGranted) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(48.dp)
                     )
                 }
@@ -313,22 +316,26 @@ fun PermissionsStep(onNext: () -> Unit, onBack: () -> Unit) {
                 }
             }
 
-            Text(
-                text = "Personalize Your Queue",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
+            AnimatedContent(targetState = isGranted, label = "text_anim") { granted ->
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = if (granted) "Access Granted" else "Enable Usage Access",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
 
-            Text(
-                text = "To identify the apps you rarely use, SwipeAway needs to understand your usage patterns. This helps us build a custom cleaning queue just for you.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
+                    Text(
+                        text = if (granted) "You're all set! SwipeAway can now process your usage safely and privately on-device to find untouched apps." else "To intelligently suggest which apps to remove, we need to know your app usage patterns. All data stays locally on your device.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(40.dp))
 
@@ -379,7 +386,7 @@ fun PermissionsStep(onNext: () -> Unit, onBack: () -> Unit) {
             Button(
                 onClick = { 
                     if (isGranted) {
-                        onNext()
+                        onFinish()
                     } else {
                         PermissionUtils.launchUsageAccessSettings(context)
                     }
@@ -394,7 +401,7 @@ fun PermissionsStep(onNext: () -> Unit, onBack: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        if (isGranted) "Continue" else "Grant Access",
+                        if (isGranted) "Finish Setup" else "Grant Access",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold
                     )
@@ -403,184 +410,154 @@ fun PermissionsStep(onNext: () -> Unit, onBack: () -> Unit) {
                 }
             }
 
-            TextButton(
-                onClick = onNext,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                shape = CircleShape
-            ) {
-                Text(
-                    "Skip for now",
-                    style = MaterialTheme.typography.labelLarge
-                )
+            AnimatedVisibility(visible = !isGranted) {
+                TextButton(
+                    onClick = onFinish,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = CircleShape
+                ) {
+                    Text(
+                        "Skip for now",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-fun ReadyStep(onFinish: () -> Unit) {
-    var progress by remember { mutableStateOf(0f) }
-    
-    val animatedProgress by animateFloatAsState(
-        targetValue = progress,
-        animationSpec = tween(durationMillis = 1000, easing = LinearOutSlowInEasing),
-        label = "progress"
-    )
-    
-    LaunchedEffect(Unit) {
-        delay(500)
-        progress = 0.15f
-    }
-
+fun HowItWorksStep(onNext: () -> Unit, onBack: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
     ) {
-        Box(
+        Row(
             modifier = Modifier
-                .padding(bottom = 48.dp),
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.Start
         ) {
-            Box(
-                modifier = Modifier
-                    .size(128.dp)
-                    .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp))
-                    .graphicsLayer {
-                        rotationZ = 3f
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Default.CheckCircle, // celebration metaphor
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(64.dp)
-                )
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
         }
-
-        Text(
-            text = "YOU'RE ALL SET!",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            letterSpacing = 1.sp
-        )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Text(
-            text = "Ready to Declutter?",
-            style = MaterialTheme.typography.displaySmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "Your phone is ready for a fresh start. We'll scan your storage to find apps you haven't used in a while.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
-
-        Spacer(modifier = Modifier.height(48.dp))
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(24.dp))
-                .border(1.dp, MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(24.dp))
+                .weight(1f)
                 .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            // Illustration of swiping cards
+            Box(
+                modifier = Modifier
+                    .size(160.dp)
+                    .padding(bottom = 32.dp),
+                contentAlignment = Alignment.Center
             ) {
+                // Background card (kept)
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
-                        .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                        .size(100.dp)
+                        .offset(x = (-30).dp, y = 10.dp)
+                        .graphicsLayer { rotationZ = -15f }
+                        .shadow(8.dp, RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(16.dp))
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        Icons.Default.Search,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(20.dp)
-                    )
+                    Icon(Icons.Default.FavoriteBorder, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
                 }
-                Column {
-                    Text(
-                        "First Scan",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        "Analyzing installed apps & storage",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+
+                // Foreground card (removing)
+                Box(
+                    modifier = Modifier
+                        .size(120.dp)
+                        .offset(x = 20.dp, y = (-10).dp)
+                        .graphicsLayer { rotationZ = 10f }
+                        .shadow(12.dp, RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(40.dp))
+                        Box(modifier = Modifier.size(40.dp, 6.dp).background(MaterialTheme.colorScheme.surfaceVariant, CircleShape))
+                    }
                 }
             }
 
-            // Progress bar
-            LinearProgressIndicator(
-                progress = { animatedProgress },
+            Text(
+                text = "How It Works",
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "We will show you the apps taking up space. Swipe right to add them to your uninstall queue, or swipe left to keep them.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            
+            Spacer(modifier = Modifier.height(32.dp))
+            
+            // Helpful indicators
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Swipe Left", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                    Text("to Keep", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Swipe Right", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+                    Text("to Queue", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error.copy(alpha=0.8f))
+                }
+            }
+        }
+
+        Box(modifier = Modifier.padding(24.dp)) {
+            Button(
+                onClick = onNext,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(CircleShape),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant
-            )
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Button(
-            onClick = onFinish,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(64.dp),
-            shape = CircleShape
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
+                    .height(64.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ),
+                shape = CircleShape
             ) {
-                Text(
-                    "Start My First Scan",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Got It",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
+                }
             }
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        TextButton(
-            onClick = onFinish,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(
-                "Maybe Later",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }
